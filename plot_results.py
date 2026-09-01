@@ -4,7 +4,7 @@ plot_results.py
 Sinh biểu đồ + bảng số liệu cho bản revise FedHST (PLOS ONE), đọc trực tiếp từ các
 CSV do federated_experiments.py xuất ra. Chia làm 2 nhóm:
 
-  A. MAIN BODY  : hội tụ (Accuracy/F1/Loss theo Round), bảng so sánh 8 thuật toán
+  A. MAIN BODY  : hội tụ (Accuracy/F1/Loss theo Round), bảng so sánh thuật toán
                   (mean ± std, có kiểm định ý nghĩa nếu có dữ liệu multi-seed),
                   bảng chi phí tính toán/truyền tải.
   B. ABLATION   : gamma, beta1/beta2, số lượng client, tỉ lệ tham gia, số local
@@ -15,7 +15,13 @@ Mọi hàm đều: (1) tự phát hiện có cột 'Seed' hay không để tính
 để dán thẳng vào bản thảo, (4) không yêu cầu các cột không tồn tại (an toàn với
 CSV cũ chưa có Round_Time_Sec/Seed/...).
 
-Cách dùng nhanh: xem khối `if __name__ == "__main__":` ở cuối file.
+Toàn bộ chữ trên hình (title, axis label, tick/giá trị trục, legend) được in
+ĐẬM và tăng cỡ chữ (+1 mức so với mặc định matplotlib) để dễ đọc khi in vào
+phụ lục (appendix) của bài báo — xem khối FONT SETTINGS bên dưới.
+
+Cách dùng nhanh: xem khối `if __name__ == "__main__":` ở cuối file — chạy 1 lần
+sẽ tự động sinh TOÀN BỘ các hình (3 dataset chính + 6 ablation + tổng hợp đa
+dataset) từ các CSV có sẵn trong cùng thư mục.
 """
 
 import os
@@ -25,6 +31,48 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 sns.set_theme(style="white", palette="tab10")
+
+# ==========================================
+# --- FONT SETTINGS: chữ đậm + lớn hơn mặc định 1 cỡ ---
+# (mặc định matplotlib: title~12, axis label~10, tick~10, legend~10)
+# ==========================================
+TITLE_FS = 16
+LABEL_FS = 14
+TICK_FS = 13
+LEGEND_FS = 13
+
+plt.rcParams.update({
+    'font.weight': 'bold',
+    'axes.titleweight': 'bold',
+    'axes.labelweight': 'bold',
+    'axes.titlesize': TITLE_FS,
+    'axes.labelsize': LABEL_FS,
+    'xtick.labelsize': TICK_FS,
+    'ytick.labelsize': TICK_FS,
+    'legend.fontsize': LEGEND_FS,
+    'legend.title_fontsize': LEGEND_FS,
+    'font.size': TICK_FS,
+})
+
+
+def _style_axis(ax):
+    """Áp dụng đậm + cỡ chữ lớn hơn cho tick labels của 1 axes (phòng khi rcParams
+    không áp dụng đủ, ví dụ với set_xticklabels gọi thủ công sau đó)."""
+    for lbl in ax.get_xticklabels() + ax.get_yticklabels():
+        lbl.set_fontweight('bold')
+        lbl.set_fontsize(TICK_FS)
+
+
+def _bold_legend(legend):
+    if legend is None:
+        return
+    for text in legend.get_texts():
+        text.set_fontweight('bold')
+        text.set_fontsize(LEGEND_FS)
+    if legend.get_title() is not None:
+        legend.get_title().set_fontweight('bold')
+        legend.get_title().set_fontsize(LEGEND_FS)
+
 
 FIG_DIR = "figures"
 TAB_DIR = "tables"
@@ -124,21 +172,24 @@ def plot_main_convergence(csv_path, algos=None, dataset_label="", out_name="main
                 continue
             if has_seed:
                 agg = sub_algo.groupby('Round')[metric].agg(['mean', 'std']).reset_index()
-                line, = ax.plot(agg['Round'], agg['mean'], label=algo, linewidth=2, color=color_map[algo])
+                line, = ax.plot(agg['Round'], agg['mean'], label=algo, linewidth=2.5, color=color_map[algo])
                 ax.fill_between(agg['Round'], agg['mean'] - agg['std'], agg['mean'] + agg['std'],
                                  alpha=0.15, color=color_map[algo])
             else:
                 sub_sorted = sub_algo.sort_values('Round')
-                line, = ax.plot(sub_sorted['Round'], sub_sorted[metric], label=algo, linewidth=2, color=color_map[algo])
+                line, = ax.plot(sub_sorted['Round'], sub_sorted[metric], label=algo, linewidth=2.5, color=color_map[algo])
             if ax is axes[0]:
                 handles.append(line)
                 labels.append(algo)
-        ax.set_xlabel('Communication Round')
-        ax.set_ylabel(ylabel)
-        ax.set_title(ylabel.split(' (')[0] + f' over Rounds {dataset_label}')
+        ax.set_xlabel('Communication Round', fontsize=LABEL_FS, fontweight='bold')
+        ax.set_ylabel(ylabel, fontsize=LABEL_FS, fontweight='bold')
+        ax.set_title(ylabel.split(' (')[0] + f' over Rounds {dataset_label}', fontsize=TITLE_FS, fontweight='bold')
+        _style_axis(ax)
 
     if handles:
-        fig.legend(handles, labels, loc='lower center', ncol=min(len(labels), 8), bbox_to_anchor=(0.5, -0.08))
+        leg = fig.legend(handles, labels, loc='lower center', ncol=min(len(labels), 8),
+                          bbox_to_anchor=(0.5, -0.08), prop={'weight': 'bold', 'size': LEGEND_FS})
+        _bold_legend(leg)
     plt.tight_layout()
     out_path = os.path.join(FIG_DIR, f"{out_name}.png")
     plt.savefig(out_path, dpi=300, bbox_inches='tight')
@@ -299,10 +350,12 @@ def overhead_table_and_plot(csv_path, payload_csv_path=None, out_name="overhead"
     ax.bar(x, time_stats['Server_Time_mean'], bottom=time_stats['Client_Time_mean'],
            label='Server aggregation time', color='#DD8452')
     ax.set_xticks(x)
-    ax.set_xticklabels(time_stats['Algorithm'], rotation=30, ha='right')
-    ax.set_ylabel('Thời gian trung bình / round (giây)')
-    ax.set_title('So sánh chi phí tính toán mỗi round')
-    ax.legend()
+    ax.set_xticklabels(time_stats['Algorithm'], rotation=30, ha='right', fontsize=TICK_FS, fontweight='bold')
+    ax.set_ylabel('Thời gian trung bình / round (giây)', fontsize=LABEL_FS, fontweight='bold')
+    ax.set_title('So sánh chi phí tính toán mỗi round', fontsize=TITLE_FS, fontweight='bold')
+    _style_axis(ax)
+    leg = ax.legend()
+    _bold_legend(leg)
     plt.tight_layout()
     out_path = os.path.join(FIG_DIR, f"{out_name}_time.png")
     plt.savefig(out_path, dpi=300, bbox_inches='tight')
@@ -354,21 +407,24 @@ def plot_gamma_ablation(csv_path, accuracy_threshold=80.0, out_name="ablation_ga
 
     fig, axes = plt.subplots(1, 3, figsize=(17, 5))
     axes[0].errorbar(gamma_df['Gamma'], gamma_df['Acc_mean'], yerr=gamma_df['Acc_std'],
-                      marker='o', capsize=4, linewidth=2, color='#4C72B0')
-    axes[0].set_xlabel(r'Spatial Damper Weight $\gamma$')
-    axes[0].set_ylabel('Steady-State Accuracy (%)')
-    axes[0].set_title(r'$\gamma$ vs. Accuracy')
+                      marker='o', capsize=4, linewidth=2.5, color='#4C72B0')
+    axes[0].set_xlabel(r'Spatial Damper Weight $\gamma$', fontsize=LABEL_FS, fontweight='bold')
+    axes[0].set_ylabel('Steady-State Accuracy (%)', fontsize=LABEL_FS, fontweight='bold')
+    axes[0].set_title(r'$\gamma$ vs. Accuracy', fontsize=TITLE_FS, fontweight='bold')
 
-    axes[1].plot(gamma_df['Gamma'], gamma_df['Conv_Round'], marker='o', linewidth=2, color='#DD8452')
-    axes[1].set_xlabel(r'Spatial Damper Weight $\gamma$')
-    axes[1].set_ylabel(f'Round đạt ngưỡng {accuracy_threshold}% Acc')
-    axes[1].set_title(r'$\gamma$ vs. Tốc độ hội tụ')
+    axes[1].plot(gamma_df['Gamma'], gamma_df['Conv_Round'], marker='o', linewidth=2.5, color='#DD8452')
+    axes[1].set_xlabel(r'Spatial Damper Weight $\gamma$', fontsize=LABEL_FS, fontweight='bold')
+    axes[1].set_ylabel(f'Round đạt ngưỡng {accuracy_threshold}% Acc', fontsize=LABEL_FS, fontweight='bold')
+    axes[1].set_title(r'$\gamma$ vs. Tốc độ hội tụ', fontsize=TITLE_FS, fontweight='bold')
 
-    axes[2].plot(gamma_df['Gamma'], gamma_df['Variance_Reduction_%'], marker='o', linewidth=2, color='#55A868')
+    axes[2].plot(gamma_df['Gamma'], gamma_df['Variance_Reduction_%'], marker='o', linewidth=2.5, color='#55A868')
     axes[2].axhline(0, color='gray', linestyle='--', linewidth=1)
-    axes[2].set_xlabel(r'Spatial Damper Weight $\gamma$')
-    axes[2].set_ylabel('Giảm phương sai so với γ=0 (%)')
-    axes[2].set_title(r'$\gamma$ vs. Variance Reduction')
+    axes[2].set_xlabel(r'Spatial Damper Weight $\gamma$', fontsize=LABEL_FS, fontweight='bold')
+    axes[2].set_ylabel('Giảm phương sai so với γ=0 (%)', fontsize=LABEL_FS, fontweight='bold')
+    axes[2].set_title(r'$\gamma$ vs. Variance Reduction', fontsize=TITLE_FS, fontweight='bold')
+
+    for ax in axes:
+        _style_axis(ax)
 
     plt.tight_layout()
     out_path = os.path.join(FIG_DIR, f"{out_name}.png")
@@ -396,10 +452,11 @@ def plot_beta_ablation(csv_path, out_name="ablation_beta"):
         stats = sub.groupby(xcol).apply(
             lambda g: pd.Series({'mean': g['Top1_Accuracy_Percent'].mean(), 'std': g['Top1_Accuracy_Percent'].std()})
         ).reset_index()
-        ax.errorbar(stats[xcol], stats['mean'], yerr=stats['std'].fillna(0), marker='o', capsize=4, linewidth=2)
-        ax.set_xlabel(xlabel)
-        ax.set_ylabel('Steady-State Accuracy (%)')
-        ax.set_title(f'Sensitivity theo {xlabel}')
+        ax.errorbar(stats[xcol], stats['mean'], yerr=stats['std'].fillna(0), marker='o', capsize=4, linewidth=2.5)
+        ax.set_xlabel(xlabel, fontsize=LABEL_FS, fontweight='bold')
+        ax.set_ylabel('Steady-State Accuracy (%)', fontsize=LABEL_FS, fontweight='bold')
+        ax.set_title(f'Sensitivity theo {xlabel}', fontsize=TITLE_FS, fontweight='bold')
+        _style_axis(ax)
 
     plt.tight_layout()
     out_path = os.path.join(FIG_DIR, f"{out_name}.png")
@@ -435,15 +492,17 @@ def plot_generic_ablation(csv_path, config_col, xlabel, title, out_name):
         # config_col có thể là chuỗi (Participation_Frac) -> dùng vị trí thứ tự thay vì giá trị số
         x_vals = range(len(sub)) if sub[config_col].dtype == object else sub[config_col]
         ax.errorbar(x_vals, sub['mean'], yerr=sub['std'].fillna(0), marker='o', capsize=4,
-                    linewidth=2, label=algo)
+                    linewidth=2.5, label=algo)
         if sub[config_col].dtype == object:
             ax.set_xticks(list(x_vals))
-            ax.set_xticklabels(sub[config_col].tolist())
+            ax.set_xticklabels(sub[config_col].tolist(), fontsize=TICK_FS, fontweight='bold')
 
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel('Steady-State Accuracy (%)')
-    ax.set_title(title)
-    ax.legend()
+    ax.set_xlabel(xlabel, fontsize=LABEL_FS, fontweight='bold')
+    ax.set_ylabel('Steady-State Accuracy (%)', fontsize=LABEL_FS, fontweight='bold')
+    ax.set_title(title, fontsize=TITLE_FS, fontweight='bold')
+    _style_axis(ax)
+    leg = ax.legend()
+    _bold_legend(leg)
     plt.tight_layout()
     out_path = os.path.join(FIG_DIR, f"{out_name}.png")
     plt.savefig(out_path, dpi=300, bbox_inches='tight')
@@ -537,10 +596,12 @@ def plot_cross_dataset_summary(csv_paths_by_dataset, order=None, out_name="cross
         ax.bar(x + i * width - 0.4 + width / 2, means, width, yerr=stds, capsize=3,
                label=algo, color=palette[i])
     ax.set_xticks(x)
-    ax.set_xticklabels(dataset_order)
-    ax.set_ylabel('Steady-State Accuracy (%)')
-    ax.set_title('FedHST Generalization Across Datasets')
-    ax.legend()
+    ax.set_xticklabels(dataset_order, fontsize=TICK_FS, fontweight='bold')
+    ax.set_ylabel('Steady-State Accuracy (%)', fontsize=LABEL_FS, fontweight='bold')
+    ax.set_title('FedHST Generalization Across Datasets', fontsize=TITLE_FS, fontweight='bold')
+    _style_axis(ax)
+    leg = ax.legend()
+    _bold_legend(leg)
     plt.tight_layout()
     fig_out = os.path.join(FIG_DIR, f"{out_name}.png")
     plt.savefig(fig_out, dpi=300, bbox_inches='tight')
@@ -551,40 +612,52 @@ def plot_cross_dataset_summary(csv_paths_by_dataset, order=None, out_name="cross
 
 
 # ==========================================
-# VÍ DỤ SỬ DỤNG
+# CHẠY TOÀN BỘ TRONG 1 LẦN (dùng cho phụ lục bài báo)
 # ==========================================
 if __name__ == "__main__":
-    # ---- MAIN BODY ----
-    #ORDER = ["FedAvgM", "FedAdam", "FedYogi", "FedAdagrad", "FedProx", "SCAFFOLD", "FedDyn", "FedHST"]
     ORDER = ["FedHST", "FedAdam", "FedDyn"]
 
-    # Nếu đã có file multi-seed đầy đủ (khuyến nghị dùng file này cho cả plot và bảng):
-    MAIN_CSV = "cifar100_tuned_suite_epochs2.csv"
-    if os.path.exists(MAIN_CSV):
-        plot_main_convergence(MAIN_CSV, algos=ORDER, dataset_label="(FashionMNIST)")
-        main_body_comparison_table(MAIN_CSV, order=ORDER)
-        significance_table(MAIN_CSV, target_algo="FedHST",
-                            baseline_algos=[a for a in ORDER if a != "FedHST"])
-        overhead_table_and_plot(MAIN_CSV)
+    # ---- MAIN BODY: hội tụ + bảng so sánh + kiểm định + overhead, cho CẢ 3 dataset ----
+    MAIN_CSVS = {
+        "CIFAR-10": ("cifar10_tuned_suite_epochs2.csv", "cifar10"),
+        "CIFAR-100": ("cifar100_tuned_suite_epochs2.csv", "cifar100"),
+        "FashionMNIST": ("fashionmnist_tuned_suite_epochs3.csv", "fashionmnist"),
+    }
+    for dataset_label, (csv_name, slug) in MAIN_CSVS.items():
+        if os.path.exists(csv_name):
+            plot_main_convergence(csv_name, algos=ORDER, dataset_label=f"({dataset_label})",
+                                   out_name=f"{slug}_main_convergence")
+            main_body_comparison_table(csv_name, order=ORDER, out_name=f"{slug}_main_comparison_table")
+            significance_table(csv_name, target_algo="FedHST",
+                                baseline_algos=[a for a in ORDER if a != "FedHST"],
+                                out_name=f"{slug}_significance_table")
+            overhead_table_and_plot(csv_name, out_name=f"{slug}_overhead")
+        else:
+            print(f"[Bỏ qua] Không tìm thấy {csv_name}")
 
-    # ---- ABLATION ----
-    if os.path.exists("fashionmnist_gamma_ablation_clients100_rounds50_alpha0_1.csv"):
-        plot_gamma_ablation("fashionmnist_gamma_ablation_clients100_rounds50_alpha0_1.csv")
+    # ---- Tổng hợp đa dataset (bar chart gộp) ----
+    cross_paths = {ds: name for ds, (name, _) in MAIN_CSVS.items() if os.path.exists(name)}
+    if len(cross_paths) >= 2:
+        plot_cross_dataset_summary(cross_paths, order=ORDER)
 
-    if os.path.exists("fashionmnist_beta_ablation_alpha0.1.csv"):
-        plot_beta_ablation("fashionmnist_beta_ablation_alpha0.1.csv")
+    # ---- ABLATION (tất cả trên FashionMNIST, alpha=0.1 trừ khi có ghi chú khác) ----
+    if os.path.exists("ablation_study/fashionmnist_gamma_ablation_clients100_rounds50_alpha0_1.csv"):
+        plot_gamma_ablation("ablation_study/fashionmnist_gamma_ablation_clients100_rounds50_alpha0_1.csv")
 
-    if os.path.exists("fashionmnist_client_count_ablation_alpha0.1.csv"):
-        plot_client_count_ablation("fashionmnist_client_count_ablation_alpha0.1.csv")
+    if os.path.exists("ablation_study/fashionmnist_beta_ablation_alpha0_1.csv"):
+        plot_beta_ablation("ablation_study/fashionmnist_beta_ablation_alpha0_1.csv")
 
-    if os.path.exists("fashionmnist_participation_ablation_alpha0.1.csv"):
-        plot_participation_ablation("fashionmnist_participation_ablation_alpha0.1.csv")
+    if os.path.exists("ablation_study/fashionmnist_client_count_ablation_alpha0_1.csv"):
+        plot_client_count_ablation("ablation_study/fashionmnist_client_count_ablation_alpha0_1.csv")
 
-    if os.path.exists("fashionmnist_local_epochs_ablation_alpha0.1.csv"):
-        plot_local_epochs_ablation("fashionmnist_local_epochs_ablation_alpha0.1.csv")
+    if os.path.exists("ablation_study/fashionmnist_participation_ablation_alpha0_1.csv"):
+        plot_participation_ablation("ablation_study/fashionmnist_participation_ablation_alpha0_1.csv")
 
-    if os.path.exists("fashionmnist_alpha_level_ablation.csv"):
-        plot_alpha_level_ablation("fashionmnist_alpha_level_ablation.csv")
+    if os.path.exists("ablation_study/fashionmnist_local_epochs_ablation_alpha0_1.csv"):
+        plot_local_epochs_ablation("ablation_study/fashionmnist_local_epochs_ablation_alpha0_1.csv")
 
-    print("\n[DONE] Đã sinh xong các biểu đồ/bảng có dữ liệu tương ứng "
-          f"trong thư mục '{FIG_DIR}/' và '{TAB_DIR}/'.")
+    if os.path.exists("ablation_study/fashionmnist_alpha_level_ablation.csv"):
+        plot_alpha_level_ablation("ablation_study/fashionmnist_alpha_level_ablation.csv")
+
+    print("\n[DONE] Đã sinh xong toàn bộ biểu đồ/bảng có dữ liệu tương ứng "
+          f"trong thư mục '{FIG_DIR}/' và '{TAB_DIR}/' (font đậm, cỡ chữ +1 mức).")
